@@ -1,0 +1,2 @@
+# BTBattLvMon
+WindowsでBTデバイスのバッテリレベルを表示する常駐アプリ
