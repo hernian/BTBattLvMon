@@ -104,8 +104,14 @@ namespace BTBattLvMon
             }
         }
 
+        private const int INTERVAL_MS = 5000; // 5000ms = 5s
+        private const int NORMAL_INTERVAL_COUNT = 6; // 6 * 5000ms = 30000ms = 30s
+        private const int FAST_SCAN_COUNT = 12;   // 12 * 5000ms = 60000ms = 60s
+
         private CancellationTokenSource _cts = new();
         private Task _task = Task.CompletedTask;
+        private volatile int _intervalCount = 0;
+        private volatile int _fastScanCount = 0;
 
         public IReadOnlyCollection<BattStatus> GetStatuses()
         {
@@ -170,27 +176,60 @@ namespace BTBattLvMon
             return true;
         }
 
-        private async Task WatchAsync(Action<IReadOnlyCollection<BattStatus>> onChanged, int intervalMs, CancellationToken token)
+        private int DecreaseIntervalCount()
+        {
+            lock (this)
+            {
+                if (_intervalCount > 0)
+                {
+                    _intervalCount--;
+                }
+                var ret = _intervalCount;
+                if (_intervalCount == 0)
+                {
+                    if (_fastScanCount > 0)
+                    {
+                        _fastScanCount--;
+                        _intervalCount = 1;
+                    }
+                    else
+                    {
+                        _intervalCount = NORMAL_INTERVAL_COUNT;
+                    }
+                }
+#if DEBUG
+                Debug.WriteLine($"DecreaseIntervalCount. ret: {ret}, _fastScanCount: {_fastScanCount}, _intervalCount: {_intervalCount}");
+#endif
+                return ret;
+            }
+        }
+
+        private async Task WatchAsync(Action<IReadOnlyCollection<BattStatus>> onChanged, CancellationToken token)
         {
             try
             {
                 var lastStatuses = Array.Empty<BattStatus>() as IReadOnlyCollection<BattStatus>;
                 while (!token.IsCancellationRequested)
                 {
-                    try
+                    var count = this.DecreaseIntervalCount();
+                    if (count == 0)
                     {
-                        var statuses = this.GetStatuses();
-                        if (!StatusesEquals(lastStatuses, statuses))
+                        try
                         {
-                            lastStatuses = statuses;
-                            onChanged(statuses);
+                            Debug.WriteLine("Scan Devices");
+                            var statuses = this.GetStatuses();
+                            if (!StatusesEquals(lastStatuses, statuses))
+                            {
+                                lastStatuses = statuses;
+                                onChanged(statuses);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine(ex.ToString());
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine(ex.ToString());
-                    }
-                    await Task.Delay(intervalMs, token);
+                    await Task.Delay(INTERVAL_MS, token);
                 }
             }
             catch (OperationCanceledException)
@@ -200,13 +239,13 @@ namespace BTBattLvMon
             Debug.WriteLine("BTConnBattMonitor.WatchAsync: canceled");
         }
 
-        public async void StartMonitor(Action<IReadOnlyCollection<BattStatus>> onChange, int intervalMs = 5000)
+        public async void StartMonitor(Action<IReadOnlyCollection<BattStatus>> onChange)
         {
             await this.StopMonitorAsync();
             _cts = new CancellationTokenSource();
             _task = Task.Run(async () =>
             {
-                await this.WatchAsync(onChange, intervalMs, _cts.Token);
+                await this.WatchAsync(onChange, _cts.Token);
             }, _cts.Token);
         }
 
@@ -228,6 +267,15 @@ namespace BTBattLvMon
             _cts.Dispose();
             _cts = new CancellationTokenSource();
             _task = Task.CompletedTask;
+        }
+
+        public void ScanFast()
+        {
+            lock (this)
+            {
+                _intervalCount = 0;
+                _fastScanCount = FAST_SCAN_COUNT;
+            }
         }
     }
 }

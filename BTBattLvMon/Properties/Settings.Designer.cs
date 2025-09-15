@@ -46,17 +46,5 @@ namespace BTBattLvMon.Properties {
                 this["IsLocationSaved"] = value;
             }
         }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("30000")]
-        public int ScanIntervalMs {
-            get {
-                return ((int)(this["ScanIntervalMs"]));
-            }
-            set {
-                this["ScanIntervalMs"] = value;
-            }
-        }
     }
 }
