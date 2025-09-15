@@ -25,31 +25,31 @@ namespace BTBattLvMon
             }
         }
 
-        public class Exception : System.Exception
+        public class SetupDiApiException : System.Exception
         {
-            public Exception(string msg) : base(msg)
+            public SetupDiApiException(string msg) : base(msg)
             {
 
             }
-            public Exception(string msg, System.Exception innerException) : base(msg, innerException)
+            public SetupDiApiException(string msg, System.Exception innerException) : base(msg, innerException)
             {
 
             }
         }
 
-        public class NotFoundException : Exception
+        public class SetupDiApiNotFoundException : SetupDiApiException
         {
-            public NotFoundException(string msg) : base(msg) { }
+            public SetupDiApiNotFoundException(string msg) : base(msg) { }
         }
 
-        public class InnerApiFailedException : Exception
+        public class SetupDiApiInnerApiFailedException : SetupDiApiException
         {
-            public InnerApiFailedException(string msg) : base(msg) { }
+            public SetupDiApiInnerApiFailedException(string msg) : base(msg) { }
         }
 
-        public class InvalidDataException : Exception
+        public class SetupDiApiInvalidDataException : SetupDiApiException
         {
-            public InvalidDataException(string msg) : base(msg) { }
+            public SetupDiApiInvalidDataException(string msg) : base(msg) { }
         }
 
         private const int DIGCF_PRESENT = 0x00000002;
@@ -168,7 +168,7 @@ namespace BTBattLvMon
             if (!success)
             {
                 var err = Marshal.GetLastWin32Error();
-                throw new InnerApiFailedException($"SetupDiGetDeviceInstanceId returned false. Win32Error: {err}");
+                throw new SetupDiApiInnerApiFailedException($"SetupDiGetDeviceInstanceId returned false. Win32Error: {err}");
             }
             return sb.ToString();
         }
@@ -192,9 +192,9 @@ namespace BTBattLvMon
                 var err = Marshal.GetLastWin32Error();
                 if (err == ERROR_NOT_FOUND)
                 {
-                    throw new NotFoundException($"Not found device property. key: \"{key}\"");
+                    throw new SetupDiApiNotFoundException($"Not found device property. key: \"{key}\"");
                 }
-                throw new InnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
+                throw new SetupDiApiInnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
             }
             if (propertyType != DEVPROP_TYPE_BOOLEAN)
             {
@@ -221,9 +221,9 @@ namespace BTBattLvMon
                 var err = Marshal.GetLastWin32Error();
                 if (err == ERROR_NOT_FOUND)
                 {
-                    throw new NotFoundException($"Not Found. key: \"{key}\"");
+                    throw new SetupDiApiNotFoundException($"Not Found. key: \"{key}\"");
                 }
-                throw new InnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
+                throw new SetupDiApiInnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
             }
             if (propertyType != DEVPROP_TYPE_STRING)
             {
@@ -256,9 +256,9 @@ namespace BTBattLvMon
                 var err = Marshal.GetLastWin32Error();
                 if (err == ERROR_NOT_FOUND)
                 {
-                    throw new NotFoundException($"Not Found. key: \"{key}\"");
+                    throw new SetupDiApiNotFoundException($"Not Found. key: \"{key}\"");
                 }
-                throw new InnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
+                throw new SetupDiApiInnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
             }
             if (propertyType != DEVPROP_TYPE_GUID)
             {
@@ -287,9 +287,9 @@ namespace BTBattLvMon
                 var err = Marshal.GetLastWin32Error();
                 if (err == ERROR_NOT_FOUND)
                 {
-                    throw new NotFoundException($"Not Found. key: {key}");
+                    throw new SetupDiApiNotFoundException($"Not Found. key: {key}");
                 }
-                throw new InnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
+                throw new SetupDiApiInnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
             }
             if (propertyType != DevPropTypes.DEVPROP_TYPE_BYTE)
             {
@@ -315,7 +315,7 @@ namespace BTBattLvMon
             var err = Marshal.GetLastWin32Error();
             if (!success && err != ERROR_INSUFFICIENT_BUFFER)
             {
-                throw new InnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
+                throw new SetupDiApiInnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
             }
             // バッファを確保
             byte[] buffer = new byte[requiredSize];
@@ -332,7 +332,7 @@ namespace BTBattLvMon
 
             if (!success)
             {
-                throw new InnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
+                throw new SetupDiApiInnerApiFailedException($"SetupDiGetDevicePropertyW returned false. Win32Error: {err}");
             }
             if (!DevPropTypes.IsStringList(propertyType))
             {

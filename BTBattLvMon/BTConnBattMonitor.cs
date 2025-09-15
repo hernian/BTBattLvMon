@@ -8,24 +8,22 @@ using System.Diagnostics;
 using static BTBattLvMon.DevPropKeys;
 using static BTBattLvMon.SetupDiApis;
 
-namespace BtMonEx02
+namespace BTBattLvMon   
 {
     public class BTConnBattMonitor
     {
-        public readonly record struct Status(string InstanceId, string FriendlyName, bool IsConnected, int BatteryLevel);
-       
         private readonly record struct BTGenDeviceItem(DeviceInfo DeviceInfo, string InstanceId, Guid ContainerId);
 
-        private const string UNNKONWN_FRIENDLY_NAME = "Unknown";
+        private const string UNKONWN_FRIENDLY_NAME = "Unknown";
         private static readonly Regex REGEX_GENERIC_DEVICE = new("GENERIC.*DEVICE", RegexOptions.IgnoreCase);
 
-        private static readonly DEVPROPKEY DEVPKEY_Device_IsBTConnected = new ()
+        private static readonly DEVPROPKEY DEVPKEY_Device_IsBTConnected = new()
         {
             fmtid = new Guid("{83DA6326-97A6-4088-9453-A1923F573B29}"),
             pid = 15
         };
 
-        private static readonly DEVPROPKEY DEVPEY_Device_BTBatteryLevel = new()
+        private static readonly DEVPROPKEY DEVPKEY_Device_BTBatteryLevel = new()
         {
             fmtid = new Guid("{104EA319-6EE2-4701-BD47-8DDBF425BBE5}"),
             pid = 2
@@ -40,7 +38,7 @@ namespace BtMonEx02
             }
             catch
             {
-                return UNNKONWN_FRIENDLY_NAME;
+                return UNKONWN_FRIENDLY_NAME;
             }
         }
 
@@ -97,7 +95,7 @@ namespace BtMonEx02
             batteryLevel = 0;
             try
             {
-                batteryLevel = GetDevicePropertyByte(devInfo, DEVPEY_Device_BTBatteryLevel);
+                batteryLevel = GetDevicePropertyByte(devInfo, DEVPKEY_Device_BTBatteryLevel);
                 return true;
             }
             catch
@@ -106,7 +104,10 @@ namespace BtMonEx02
             }
         }
 
-        public Status[] GetStatus()
+        private CancellationTokenSource _cts = new();
+        private Task _task = Task.CompletedTask;
+
+        public IReadOnlyCollection<BattStatus> GetStatuses()
         {
             using var snapshot = GetDeviceSnapshot();
 
@@ -134,37 +135,99 @@ namespace BtMonEx02
                 }
             }
 
-            var listStatus = new List<Status>();
+            var listStatus = new List<BattStatus>();
             foreach (var genDevItem in listBTGenDev)
             {
-                var friendlyName = GetDeviceInfoFriendlyName(genDevItem.DeviceInfo);
-                var isBTConnected = false;
-                if (!TryGetDeviceInfoIsBTConnected(genDevItem.DeviceInfo, out isBTConnected))
+                if (!TryGetDeviceInfoIsBTConnected(genDevItem.DeviceInfo, out bool isBTConnected) || !isBTConnected)
                 {
-                    isBTConnected = false;
+                    continue;
                 }
+                var friendlyName = GetDeviceInfoFriendlyName(genDevItem.DeviceInfo);
                 var batteryLevel = 0;
-                if (isBTConnected)
+                var container = dictContainer[genDevItem.ContainerId];
+                foreach (var devInfo in container)
                 {
-                    var container = dictContainer[genDevItem.ContainerId];
-                    foreach (var devInfo in container)
+                    if (TryGetDeviceInfoBatteryLevel(devInfo, out batteryLevel))
                     {
-                        if (TryGetDeviceInfoBatteryLevel(devInfo, out batteryLevel))
-                        {
-                            break;
-                        }
+                        break;
                     }
                 }
-                var status = new Status(genDevItem.InstanceId, friendlyName, isBTConnected, batteryLevel);
+                var status = new BattStatus(genDevItem.InstanceId, friendlyName, batteryLevel);
                 listStatus.Add(status);
             }
 
-            return listStatus.ToArray();
+            return listStatus.AsReadOnly();
+        }
+        private static bool StatusesEquals(IReadOnlyCollection<BattStatus> a, IReadOnlyCollection<BattStatus> b)
+        {
+            if (a.Count != b.Count) return false;
+            var enumA = a.GetEnumerator();
+            var enumB = b.GetEnumerator();
+            while (enumA.MoveNext() && enumB.MoveNext())
+            {
+                if (!enumA.Current.Equals(enumB.Current)) return false;
+            }
+            return true;
         }
 
-        public Task<Status[]> GetStatusesAsync()
+        private async Task WatchAsync(Action<IReadOnlyCollection<BattStatus>> onChanged, int intervalMs, CancellationToken token)
         {
-            return Task.Run<Status[]>(() => GetStatus());
+            try
+            {
+                var lastStatuses = Array.Empty<BattStatus>() as IReadOnlyCollection<BattStatus>;
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var statuses = this.GetStatuses();
+                        if (!StatusesEquals(lastStatuses, statuses))
+                        {
+                            lastStatuses = statuses;
+                            onChanged(statuses);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(ex.ToString());
+                    }
+                    await Task.Delay(intervalMs, token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // ignore
+            }
+            Debug.WriteLine("BTConnBattMonitor.WatchAsync: canceled");
+        }
+
+        public async void StartMonitor(Action<IReadOnlyCollection<BattStatus>> onChange, int intervalMs = 5000)
+        {
+            await this.StopMonitorAsync();
+            _cts = new CancellationTokenSource();
+            _task = Task.Run(async () =>
+            {
+                await this.WatchAsync(onChange, intervalMs, _cts.Token);
+            }, _cts.Token);
+        }
+
+        public async Task StopMonitorAsync()
+        {
+            _cts.Cancel();
+            try
+            {
+                await _task;
+            }
+            catch (OperationCanceledException)
+            {
+                // ignore
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.ToString());
+            }
+            _cts.Dispose();
+            _cts = new CancellationTokenSource();
+            _task = Task.CompletedTask;
         }
     }
 }
