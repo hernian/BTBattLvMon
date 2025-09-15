@@ -24,7 +24,6 @@ namespace BTBattLvMon
         private int _screenDpi = 96;
         private bool _isAdjustingLocation = false;
         private readonly System.Windows.Forms.Timer _locationAdjustTimer;
-        // private DeviceChangeWatcher _deviceChangeWatcher;
 
         public MainWindow()
         {
@@ -44,13 +43,6 @@ namespace BTBattLvMon
             _locationAdjustTimer = new System.Windows.Forms.Timer();
             _locationAdjustTimer.Interval = 3000;
             _locationAdjustTimer.Tick += LocationAdjustTimer_Tick;
-
-            // _deviceChangeWatcher = new(this.Handle, DevClass.BLUETOOTH, this.OnDeviceChanged);
-        }
-
-        private void OnDeviceChanged()
-        {
-            _monitor.ScanFast();
         }
 
         protected override void OnLoad(EventArgs e)
@@ -220,8 +212,6 @@ namespace BTBattLvMon
 
             // ここで呼び出し側へ返る
             await Task.Yield();
-
-            // _deviceChangeWatcher.Dispose();
 
             // FormClosingはキャンセルしたため、MainWindowは非表示にしたものの通常のメッセージループ中となる
             // バックグラウンドタスクの終了を待つ
